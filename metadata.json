@@ -1,0 +1,5 @@
+{
+  "name": "PNG to Excel Converter",
+  "description": "Instantly convert multiple PNG images containing tables into editable Excel spreadsheets using Gemini 2.5 Flash.",
+  "requestFramePermissions": []
+}
