@@ -41,7 +41,7 @@ export const extractTableFromImage = async (file: File): Promise<TableData> => {
         parts: [
           {
             inlineData: {
-              mimeType: file.type,
+              mimeType: file.type || 'image/png',
               data: base64Data
             }
           },
@@ -103,7 +103,7 @@ export const extractTextFromImage = async (file: File): Promise<string> => {
         parts: [
           {
             inlineData: {
-              mimeType: file.type,
+              mimeType: file.type || 'image/png',
               data: base64Data
             }
           },
@@ -116,6 +116,52 @@ export const extractTextFromImage = async (file: File): Promise<string> => {
   } catch (error: any) {
     console.error("Gemini Text Extraction Error:", error);
     throw new Error("Failed to extract text");
+  }
+};
+
+/**
+ * Specifically designed for PDF/Image to Word conversion.
+ * Focuses on maintaining layout, tables, and describing charts.
+ */
+export const extractRichDocumentContent = async (file: File): Promise<string> => {
+  try {
+    const base64Data = await fileToGenerativePart(file);
+    const mimeType = file.type || (file.name.endsWith('.pdf') ? 'application/pdf' : 'image/png');
+
+    const prompt = `
+      Convert the attached document into a high-quality HTML representation suitable for opening in Microsoft Word.
+      
+      CRITICAL INSTRUCTIONS:
+      1. PRESERVE LAYOUT: Maintain headings, subheadings, and paragraphs.
+      2. TABLES: Reconstruct all tables exactly using <table> tags with borders.
+      3. CHARTS/DIAGRAMS: For any charts, graphs, or diagrams:
+         - Create a summary description of what the chart shows.
+         - If possible, extract the data points from the chart into an HTML table.
+         - Do NOT simply skip them.
+      4. FORMATTING: Use bold, italics, and lists where appropriate.
+      
+      Return ONLY the HTML content that would go inside a <body> tag. Do not include <html> or <body> tags themselves.
+    `;
+
+    const response = await ai.models.generateContent({
+      model: "gemini-2.5-flash",
+      contents: {
+        parts: [
+          {
+            inlineData: {
+              mimeType: mimeType,
+              data: base64Data
+            }
+          },
+          { text: prompt }
+        ]
+      }
+    });
+
+    return response.text || "Empty document.";
+  } catch (error: any) {
+    console.error("Gemini Rich Extraction Error:", error);
+    throw new Error("Failed to reconstruct document layout.");
   }
 };
 

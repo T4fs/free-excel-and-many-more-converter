@@ -12,7 +12,7 @@ export type ToolType =
   | 'Image To Text' | 'PNG to JPG' | 'JFIF to JPG' | 'SVG to JPG' 
   | 'JPG to WORD' | 'PDF to EXCEL' | 'WEBP to JPG' | 'EXCEL to JPG' 
   | 'JPG to PNG' | 'CSV to EXCEL' | 'GIF to JPG' | 'EXCEL FORMULA' 
-  | 'CSV Splitter';
+  | 'CSV Splitter' | 'PDF to WORD';
 
 export interface TableData {
   rows: string[][];

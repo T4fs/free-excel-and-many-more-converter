@@ -3,7 +3,7 @@ import { Header, tools as toolsConfig } from './components/Header';
 import { FileUpload } from './components/FileUpload';
 import { FilePreviewList } from './components/FilePreviewList';
 import { ProcessedFile, ProcessingStatus, ToolType } from './types';
-import { extractTableFromImage, extractTextFromImage, generateExcelFormula } from './services/gemini';
+import { extractTableFromImage, extractTextFromImage, extractRichDocumentContent, generateExcelFormula } from './services/gemini';
 import { generateExcelWorkbook, generateSingleExcel, generateBatchZip } from './services/excel';
 import { convertImage, imageToSvg } from './services/imageConversion';
 import { Sparkles, FileSpreadsheet, AlertTriangle, Download, Archive, Layers, Calculator, FileText, ArrowRight } from 'lucide-react';
@@ -26,12 +26,13 @@ export default function App() {
     return toolsConfig.find(t => t.name === activeTool) || toolsConfig[0];
   }, [activeTool]);
 
-  const getAcceptedFileTypes = (tool: ToolType) => {
-    if (tool.includes('EXCEL') && !tool.includes('PNG') && !tool.includes('PDF')) return '.xlsx, .xls, .csv';
-    if (tool.includes('CSV')) return '.csv, .xlsx';
-    if (tool === 'WORD to JPG') return '.doc, .docx'; // Simple placeholder, though we might not support actual parsing
-    return 'image/*';
-  };
+  const acceptedFileTypes = useMemo(() => {
+    if (activeTool === 'PDF to EXCEL' || activeTool === 'PDF to WORD' || activeTool === 'EXCEL to PDF') return '.pdf';
+    if (activeTool.includes('EXCEL') && !activeTool.includes('PNG')) return '.xlsx, .xls, .csv';
+    if (activeTool.includes('CSV')) return '.csv, .xlsx';
+    if (activeTool === 'WORD to JPG') return '.doc, .docx';
+    return 'image/png, image/jpeg, image/webp';
+  }, [activeTool]);
 
   // 2. Clear state on tool change
   const handleToolSelect = (tool: ToolType) => {
@@ -84,8 +85,18 @@ export default function App() {
             updateFileState(fileWrapper.id, { status: ProcessingStatus.COMPLETED, result });
           }
           
-          // B. Gemini Text Extraction (Image to Text, JPG to Word)
-          else if (['Image To Text', 'JPG to WORD'].includes(activeTool)) {
+          // B. Rich Document Extraction (PDF to Word, JPG to Word)
+          // Using extractRichDocumentContent to preserve charts/tables
+          else if (['JPG to WORD', 'PDF to WORD'].includes(activeTool)) {
+            const richHtml = await extractRichDocumentContent(fileWrapper.file);
+            updateFileState(fileWrapper.id, { 
+              status: ProcessingStatus.COMPLETED, 
+              result: { rows: [], textContent: richHtml } 
+            });
+          }
+
+          // C. Simple Text Extraction
+          else if (activeTool === 'Image To Text') {
             const text = await extractTextFromImage(fileWrapper.file);
             updateFileState(fileWrapper.id, { 
               status: ProcessingStatus.COMPLETED, 
@@ -93,13 +104,13 @@ export default function App() {
             });
           }
 
-          // C. Image Conversion (Simple Canvas)
+          // D. Image Conversion (Simple Canvas)
           else if (['JPG to PNG', 'PNG to JPG', 'WEBP to JPG', 'JPG to WEBP', 'GIF to JPG', 'JFIF to JPG', 'HEIC to JPG', 'BMP', 'JPG to BMP'].includes(activeTool)) {
             let format = 'image/jpeg';
             let ext = 'jpg';
             if (activeTool.includes('PNG')) { format = 'image/png'; ext = 'png'; }
             if (activeTool.includes('WEBP')) { format = 'image/webp'; ext = 'webp'; }
-            if (activeTool.includes('BMP')) { format = 'image/bmp'; ext = 'bmp'; } // Browser BMP support varies, often just saves as image/bmp
+            if (activeTool.includes('BMP')) { format = 'image/bmp'; ext = 'bmp'; }
 
             const blob = await convertImage(fileWrapper.file, format);
             updateFileState(fileWrapper.id, { 
@@ -109,19 +120,18 @@ export default function App() {
             });
           }
 
-          // D. SVG Conversion
+          // E. SVG Conversion
           else if (activeTool === 'JPG to SVG' || activeTool === 'SVG to JPG') {
              if (activeTool === 'JPG to SVG') {
                const blob = await imageToSvg(fileWrapper.file);
                updateFileState(fileWrapper.id, { status: ProcessingStatus.COMPLETED, outputBlob: blob, outputExtension: 'svg' });
              } else {
-               // SVG to JPG
                const blob = await convertImage(fileWrapper.file, 'image/jpeg');
                updateFileState(fileWrapper.id, { status: ProcessingStatus.COMPLETED, outputBlob: blob, outputExtension: 'jpg' });
              }
           }
 
-          // E. Excel/CSV conversions
+          // F. Excel/CSV conversions
           else if (activeTool === 'EXCEL to CSV' || activeTool === 'CSV to EXCEL') {
             const arrayBuffer = await fileWrapper.file.arrayBuffer();
             const workbook = XLSX.read(arrayBuffer);
@@ -135,7 +145,6 @@ export default function App() {
             });
           }
 
-          // F. Placeholder fallback for unsupported inputs
           else {
              throw new Error("This specific conversion is not fully supported in this demo yet.");
           }
@@ -153,10 +162,8 @@ export default function App() {
 
   // 4. Download Handling
   const handleDownloadSingle = (file: ProcessedFile) => {
-    // A. Excel Output
     if (['PNG to EXCEL', 'PDF to EXCEL', 'CSV to EXCEL', 'EXCEL to CSV'].includes(activeTool)) {
        if (activeTool === 'EXCEL to CSV') {
-          // Special case for CSV download
           if (!file.result?.rows) return;
           const ws = XLSX.utils.aoa_to_sheet(file.result.rows);
           const csv = XLSX.utils.sheet_to_csv(ws);
@@ -166,28 +173,42 @@ export default function App() {
           link.download = `${file.file.name.split('.')[0]}.csv`;
           link.click();
        } else {
-          // Default Excel download
           generateSingleExcel(file);
        }
     } 
-    // B. Text Output
-    else if (['Image To Text', 'JPG to WORD'].includes(activeTool)) {
-       const text = file.result?.textContent || "";
-       const ext = activeTool === 'JPG to WORD' ? 'doc' : 'txt';
-       // Quick fake doc (HTML)
-       const content = activeTool === 'JPG to WORD' 
-          ? `<html xmlns:o='urn:schemas-microsoft-com:office:office' xmlns:w='urn:schemas-microsoft-com:office:word'><head><meta charset='utf-8'></head><body>${text.replace(/\n/g, '<br>')}</body></html>`
-          : text;
-          
-       const mime = activeTool === 'JPG to WORD' ? 'application/msword' : 'text/plain';
+    else if (['Image To Text', 'JPG to WORD', 'PDF to WORD'].includes(activeTool)) {
+       const content = file.result?.textContent || "";
+       const isWord = ['JPG to WORD', 'PDF to WORD'].includes(activeTool);
+       const ext = isWord ? 'doc' : 'txt';
        
-       const blob = new Blob([content], { type: mime });
+       // Enhanced Word Header to preserve structure
+       const fullDocContent = isWord 
+          ? `
+            <html xmlns:o='urn:schemas-microsoft-com:office:office' xmlns:w='urn:schemas-microsoft-com:office:word' xmlns='http://www.w3.org/TR/REC-html40'>
+            <head>
+              <meta charset='utf-8'>
+              <style>
+                body { font-family: 'Calibri', 'Arial', sans-serif; line-height: 1.5; }
+                table { border-collapse: collapse; width: 100%; margin: 15px 0; }
+                th, td { border: 1px solid #999; padding: 8px; text-align: left; }
+                h1, h2, h3 { color: #2E74B5; }
+              </style>
+            </head>
+            <body>
+              ${content}
+            </body>
+            </html>
+          `
+          : content;
+          
+       const mime = isWord ? 'application/msword' : 'text/plain';
+       
+       const blob = new Blob([fullDocContent], { type: mime });
        const link = document.createElement("a");
        link.href = URL.createObjectURL(blob);
        link.download = `${file.file.name.split('.')[0]}.${ext}`;
        link.click();
     }
-    // C. Image/Blob Output
     else if (file.outputBlob && file.outputExtension) {
        const link = document.createElement("a");
        link.href = URL.createObjectURL(file.outputBlob);
@@ -196,7 +217,6 @@ export default function App() {
     }
   };
   
-  // 5. Formula Logic
   const handleFormulaGenerate = async () => {
     if (!formulaPrompt) return;
     setIsProcessing(true);
@@ -214,7 +234,6 @@ export default function App() {
 
       <main className="max-w-6xl mx-auto px-4 py-8">
         
-        {/* Dynamic Intro */}
         <div className="mb-8 text-center max-w-2xl mx-auto mt-8">
           <h2 className="text-3xl font-bold text-slate-900 mb-3 flex items-center justify-center gap-3">
              <div className={`p-2 rounded-lg ${currentToolConfig.bg} ${currentToolConfig.color}`}>
@@ -229,7 +248,6 @@ export default function App() {
           </p>
         </div>
 
-        {/* --- FORMULA UI --- */}
         {activeTool === 'EXCEL FORMULA' ? (
            <div className="max-w-2xl mx-auto bg-white rounded-2xl shadow-sm border border-slate-200 p-8">
               <label className="block text-sm font-medium text-slate-700 mb-2">Describe your calculation</label>
@@ -261,10 +279,13 @@ export default function App() {
               )}
            </div>
         ) : (
-          /* --- FILE CONVERSION UI --- */
           <>
             <div className="bg-white rounded-2xl shadow-sm border border-slate-200 p-6 md:p-8">
-              <FileUpload onFilesSelected={handleFilesSelected} disabled={isProcessing} />
+              <FileUpload 
+                onFilesSelected={handleFilesSelected} 
+                disabled={isProcessing} 
+                accept={acceptedFileTypes}
+              />
               
               {processError && (
                 <div className="mt-4 p-4 bg-red-50 text-red-700 rounded-lg flex items-center gap-2 text-sm border border-red-100">
@@ -281,7 +302,6 @@ export default function App() {
                         <span className="font-semibold text-slate-900">{files.length}</span> file{files.length !== 1 && 's'} loaded
                       </div>
                       
-                      {/* Show Merge Option only for Excel Generation tools */}
                       {['PNG to EXCEL', 'PDF to EXCEL'].includes(activeTool) && (
                         <label className="flex items-center gap-2 text-sm text-slate-700 font-medium cursor-pointer hover:text-indigo-600 transition-colors bg-slate-50 px-3 py-1.5 rounded-lg border border-slate-200 select-none">
                           <input 

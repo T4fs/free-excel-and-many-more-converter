@@ -4,16 +4,19 @@ import { UploadCloud } from 'lucide-react';
 interface FileUploadProps {
   onFilesSelected: (files: File[]) => void;
   disabled?: boolean;
+  accept?: string;
 }
 
-export const FileUpload: React.FC<FileUploadProps> = ({ onFilesSelected, disabled }) => {
+export const FileUpload: React.FC<FileUploadProps> = ({ 
+  onFilesSelected, 
+  disabled, 
+  accept = "image/png, image/jpeg, image/webp" 
+}) => {
   const handleDrop = useCallback((e: React.DragEvent<HTMLDivElement>) => {
     e.preventDefault();
     if (disabled) return;
     
-    const droppedFiles = Array.from(e.dataTransfer.files).filter((file: File) => 
-      file.type.startsWith('image/')
-    );
+    const droppedFiles = Array.from(e.dataTransfer.files);
     if (droppedFiles.length > 0) {
       onFilesSelected(droppedFiles);
     }
@@ -22,9 +25,7 @@ export const FileUpload: React.FC<FileUploadProps> = ({ onFilesSelected, disable
   const handleFileInput = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
     if (disabled || !e.target.files) return;
     
-    const selectedFiles = Array.from(e.target.files).filter((file: File) => 
-      file.type.startsWith('image/')
-    );
+    const selectedFiles = Array.from(e.target.files);
     if (selectedFiles.length > 0) {
       onFilesSelected(selectedFiles);
     }
@@ -44,7 +45,7 @@ export const FileUpload: React.FC<FileUploadProps> = ({ onFilesSelected, disable
       <input
         type="file"
         multiple
-        accept="image/png, image/jpeg, image/webp"
+        accept={accept}
         onChange={handleFileInput}
         disabled={disabled}
         className="absolute inset-0 w-full h-full opacity-0 cursor-pointer disabled:cursor-not-allowed"
@@ -55,10 +56,10 @@ export const FileUpload: React.FC<FileUploadProps> = ({ onFilesSelected, disable
         </div>
         <div>
           <h3 className="text-lg font-semibold text-slate-700">
-            {disabled ? 'Processing in progress...' : 'Click or Drag PNGs here'}
+            {disabled ? 'Processing in progress...' : `Click or Drag files here`}
           </h3>
           <p className="text-sm text-slate-500 mt-1">
-            Supports multiple PNG, JPG, or WEBP files at once
+            Accepts {accept.split(',').join(' ')} files
           </p>
         </div>
       </div>

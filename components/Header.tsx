@@ -28,6 +28,7 @@ export const tools: { name: ToolType; icon: any; color: string; bg: string }[] =
   { name: 'GIF to JPG', icon: Image, color: 'text-green-500', bg: 'bg-green-100' },
   { name: 'EXCEL FORMULA', icon: FileSpreadsheet, color: 'text-emerald-600', bg: 'bg-emerald-100' },
   { name: 'CSV Splitter', icon: Split, color: 'text-purple-600', bg: 'bg-purple-100' },
+  { name: 'PDF to WORD', icon: FileText, color: 'text-blue-800', bg: 'bg-blue-50' },
 ];
 
 interface HeaderProps {
