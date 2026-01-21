@@ -1,7 +1,6 @@
+
 import { GoogleGenAI, Type } from "@google/genai";
 import { TableData } from "../types";
-
-const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
 
 // Helper to convert file to Base64
 export const fileToGenerativePart = async (file: File): Promise<string> => {
@@ -19,6 +18,8 @@ export const fileToGenerativePart = async (file: File): Promise<string> => {
 };
 
 export const extractTableFromImage = async (file: File): Promise<TableData> => {
+  // Initialize AI client inside the function to ensure up-to-date API key
+  const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
   try {
     const base64Data = await fileToGenerativePart(file);
 
@@ -36,7 +37,7 @@ export const extractTableFromImage = async (file: File): Promise<TableData> => {
     `;
 
     const response = await ai.models.generateContent({
-      model: "gemini-2.5-flash",
+      model: "gemini-3-flash-preview",
       contents: {
         parts: [
           {
@@ -58,6 +59,8 @@ export const extractTableFromImage = async (file: File): Promise<TableData> => {
               description: "A short, descriptive name for the excel sheet."
             },
             subject: {
+              // Fix: Removed invalid reference to ToolType which was causing a "Cannot find name 'ToolType'" error.
+              // ToolType is a type, not a runtime value. Using Type.STRING directly as it always evaluates to this.
               type: Type.STRING,
               description: "The category or subject of the data (e.g. 'Addresses', 'Names', 'Phone Numbers')."
             },
@@ -94,11 +97,13 @@ export const extractTableFromImage = async (file: File): Promise<TableData> => {
 };
 
 export const extractTextFromImage = async (file: File): Promise<string> => {
+  // Initialize AI client inside the function to ensure up-to-date API key
+  const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
   try {
     const base64Data = await fileToGenerativePart(file);
 
     const response = await ai.models.generateContent({
-      model: "gemini-2.5-flash",
+      model: "gemini-3-flash-preview",
       contents: {
         parts: [
           {
@@ -124,6 +129,8 @@ export const extractTextFromImage = async (file: File): Promise<string> => {
  * Focuses on maintaining layout, tables, and describing charts.
  */
 export const extractRichDocumentContent = async (file: File): Promise<string> => {
+  // Initialize AI client inside the function to ensure up-to-date API key
+  const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
   try {
     const base64Data = await fileToGenerativePart(file);
     const mimeType = file.type || (file.name.endsWith('.pdf') ? 'application/pdf' : 'image/png');
@@ -144,7 +151,7 @@ export const extractRichDocumentContent = async (file: File): Promise<string> =>
     `;
 
     const response = await ai.models.generateContent({
-      model: "gemini-2.5-flash",
+      model: "gemini-3-flash-preview",
       contents: {
         parts: [
           {
@@ -166,9 +173,11 @@ export const extractRichDocumentContent = async (file: File): Promise<string> =>
 };
 
 export const generateExcelFormula = async (description: string): Promise<string> => {
+  // Initialize AI client inside the function to ensure up-to-date API key
+  const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
   try {
     const response = await ai.models.generateContent({
-      model: "gemini-2.5-flash",
+      model: "gemini-3-flash-preview",
       contents: `Generate an Excel formula for this request: "${description}". 
       Return ONLY the formula starting with =, no markdown, no explanation.`
     });
